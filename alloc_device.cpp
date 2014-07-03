@@ -16,9 +16,19 @@
  * limitations under the License.
  */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <assert.h>
+#include <unistd.h>
 
 #include <cutils/log.h>
 #include <cutils/atomic.h>
@@ -31,89 +41,74 @@
 #include "gralloc_priv.h"
 #include "gralloc_helper.h"
 
-#include <linux/ion.h>
-#include <ion/ion.h>
+#include "drm_fourcc.h"
+#include "xf86drm.h"
+#include "xf86drmMode.h"
 
 #define GRALLOC_ALIGN( value, base ) (((value) + ((base) - 1)) & ~((base) - 1))
 
-static int gralloc_alloc_buffer(alloc_device_t *dev, size_t size, int usage, buffer_handle_t *pHandle)
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(arr) (sizeof(arr)/sizeof((arr)[0]))
+#endif
+
+
+static int gralloc_alloc_buffer(alloc_device_t *dev, int width, int height, int bpp, int usage, size_t *stride, buffer_handle_t *pHandle)
 {
-	{
-		private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
-		struct ion_handle *ion_hnd;
-		unsigned char *cpu_ptr;
-		int shared_fd;
-		int ret;
+	private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
+	struct drm_mode_create_dumb create_arg;
+	struct drm_mode_map_dumb map_arg;
+	struct drm_mode_destroy_dumb destroy_arg;
+	void *cpu_ptr;
+	int ret;
+	int prime_fd;
+	private_handle_t *hnd;
 
-		ret = ion_alloc(m->ion_client, size, 0, ION_HEAP_TYPE_DMA_MASK, 0, &ion_hnd);
+	memset (&create_arg, 0, sizeof (create_arg));
+	create_arg.bpp = 32;
+	create_arg.width = width;
+	create_arg.height = height;
 
-		if (ret != 0)
-		{
-			AERR("Failed to ion_alloc from ion_client:%d", m->ion_client);
-			return -1;
-		}
-
-		ret = ion_share(m->ion_client, ion_hnd, &shared_fd);
-
-		if (ret != 0)
-		{
-			AERR("ion_share( %d ) failed", m->ion_client);
-
-			if (0 != ion_free(m->ion_client, ion_hnd))
-			{
-				AERR("ion_free( %d ) failed", m->ion_client);
-			}
-
-			return -1;
-		}
-
-		cpu_ptr = (unsigned char *)mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, shared_fd, 0);
-
-		if (MAP_FAILED == cpu_ptr)
-		{
-			AERR("ion_map( %d ) failed", m->ion_client);
-
-			if (0 != ion_free(m->ion_client, ion_hnd))
-			{
-				AERR("ion_free( %d ) failed", m->ion_client);
-			}
-
-			close(shared_fd);
-			return -1;
-		}
-
-		private_handle_t *hnd = new private_handle_t(private_handle_t::PRIV_FLAGS_USES_ION, usage, size, (int)cpu_ptr, private_handle_t::LOCK_STATE_MAPPED);
-
-		if (NULL != hnd)
-		{
-			hnd->share_fd = shared_fd;
-			hnd->ion_hnd = ion_hnd;
-			*pHandle = hnd;
-			return 0;
-		}
-		else
-		{
-			AERR("Gralloc out of mem for ion_client:%d", m->ion_client);
-		}
-
-		close(shared_fd);
-		ret = munmap(cpu_ptr, size);
-
-		if (0 != ret)
-		{
-			AERR("munmap failed for base:%p size: %d", cpu_ptr, size);
-		}
-
-		ret = ion_free(m->ion_client, ion_hnd);
-
-		if (0 != ret)
-		{
-			AERR("ion_free( %d ) failed", m->ion_client);
-		}
-
-		return -1;
+	ret = drmIoctl (m->drm_fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_arg);
+	if (ret) {
+		ALOGE("Failed to create DUMB buffer %s", strerror(errno));
+		return ret;
 	}
 
+	ret = drmPrimeHandleToFD (m->drm_fd, create_arg.handle, DRM_CLOEXEC, &prime_fd);
+	if (ret) {
+		ALOGE("Failed to get fd for DUMB buffer %s", strerror(errno));
+		goto err;
+	}
+
+	memset(&map_arg, 0, sizeof map_arg);
+	map_arg.handle = create_arg.handle;
+	ret = drmIoctl(m->drm_fd, DRM_IOCTL_MODE_MAP_DUMB, &map_arg);
+	if (ret) {
+		ALOGE("Failed to request DUMB buffer MAP %s", strerror(errno));
+		goto err;
+	}
+
+	cpu_ptr = mmap(0, create_arg.size, PROT_WRITE | PROT_READ, MAP_SHARED, m->drm_fd, map_arg.offset);
+
+	if (cpu_ptr == MAP_FAILED) {
+		ALOGE("Faile to mmap DUMB buffer %s", strerror(errno));
+		goto err;
+	}
+
+	hnd = new private_handle_t(private_handle_t::PRIV_FLAGS_USES_ION, usage, create_arg.size, (int)cpu_ptr, private_handle_t::LOCK_STATE_MAPPED);
+
+	hnd->share_fd = prime_fd;
+	hnd->drm_hnd = create_arg.handle;
+	*pHandle = hnd;
+
+	*stride = create_arg.pitch / bpp;
+	return 0;
+
+err:
+	memset (&destroy_arg, 0, sizeof destroy_arg);
+	destroy_arg.handle = create_arg.handle;
+	drmIoctl (m->drm_fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_arg);
+	return ret;
 }
 
 static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int usage, buffer_handle_t *pHandle, int *pStride)
@@ -125,6 +120,7 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 
 	size_t size;
 	size_t stride;
+	int bpp = 0;
 
 	if (format == HAL_PIXEL_FORMAT_YCrCb_420_SP || format == HAL_PIXEL_FORMAT_YV12)
 	{
@@ -143,8 +139,6 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 	}
 	else
 	{
-		int bpp = 0;
-
 		switch (format)
 		{
 			case HAL_PIXEL_FORMAT_RGBA_8888:
@@ -174,9 +168,9 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 		stride = bpr / bpp;
 	}
 
-	int err = gralloc_alloc_buffer(dev, size, usage, pHandle);
+	int err = gralloc_alloc_buffer(dev, w, h, bpp, usage, &stride, pHandle);
 
-	if (err < 0)
+	if (err)
 	{
 		return err;
 	}
@@ -225,35 +219,21 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 
 static int alloc_device_free(alloc_device_t *dev, buffer_handle_t handle)
 {
-	if (private_handle_t::validate(handle) < 0)
-	{
-		return -EINVAL;
-	}
-
 	private_handle_t const *hnd = reinterpret_cast<private_handle_t const *>(handle);
 
 	if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
 	{
 		private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
+		struct drm_mode_destroy_dumb destroy_arg;
 
-		/* Buffer might be unregistered so we need to check for invalid ump handle*/
-		if (0 != hnd->base)
-		{
-			if (0 != munmap((void *)hnd->base, hnd->size))
-			{
-				AERR("Failed to munmap handle 0x%x", (unsigned int)hnd);
-			}
-		}
+		munmap((void *)hnd->base, hnd->size);
 
+		memset (&destroy_arg, 0, sizeof destroy_arg);
+		destroy_arg.handle = hnd->drm_hnd;
+		drmIoctl (m->drm_fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_arg);
 		close(hnd->share_fd);
 
-		if (0 != ion_free(m->ion_client, hnd->ion_hnd))
-		{
-			AERR("Failed to ion_free( ion_client: %d ion_hnd: %p )", m->ion_client, hnd->ion_hnd);
-		}
-
 		memset((void *)hnd, 0, sizeof(*hnd));
-
 	}
 
 	delete hnd;
@@ -265,16 +245,7 @@ static int alloc_device_close(struct hw_device_t *device)
 {
 	alloc_device_t *dev = reinterpret_cast<alloc_device_t *>(device);
 
-	if (dev)
-	{
-		private_module_t *m = reinterpret_cast<private_module_t *>(device);
-
-		if (0 != ion_close(m->ion_client))
-		{
-			AERR("Failed to close ion_client: %d", m->ion_client);
-		}
-
-		close(m->ion_client);
+	if (dev) {
 		delete dev;
 	}
 
@@ -302,16 +273,6 @@ int alloc_device_open(hw_module_t const *module, const char *name, hw_device_t *
 	dev->common.close = alloc_device_close;
 	dev->alloc = alloc_device_alloc;
 	dev->free = alloc_device_free;
-
-	private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
-	m->ion_client = ion_open();
-
-	if (m->ion_client < 0)
-	{
-		AERR("ion_open failed with %s", strerror(errno));
-		delete dev;
-		return -1;
-	}
 
 	*device = &dev->common;
 

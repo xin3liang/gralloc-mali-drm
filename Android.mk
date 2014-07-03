@@ -27,9 +27,12 @@ LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_MODULE := gralloc.default
 #LOCAL_MODULE_TAGS := optional
 
-LOCAL_SHARED_LIBRARIES := libion libhardware liblog libcutils
+LOCAL_SHARED_LIBRARIES := libdrm libhardware liblog libcutils
 
-LOCAL_C_INCLUDES := system/core/include/
+LOCAL_C_INCLUDES := system/core/include/ \
+	$(LOCAL_PATH)/../../../../external/drm \
+        $(LOCAL_PATH)/../../../../external/drm/include/drm \
+        $(LOCAL_PATH)/../../include
 
 LOCAL_CFLAGS := -DLOG_TAG=\"gralloc\" -DGRALLOC_32_BITS -DSTANDARD_LINUX_SCREEN -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 

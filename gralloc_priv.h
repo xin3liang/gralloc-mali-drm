@@ -31,6 +31,9 @@
 #include <alloc_device.h>
 #include <utils/Log.h>
 
+/* use by MALI EGL */
+#define GRALLOC_ARM_DMA_BUF_MODULE 1
+
 /* the max string size of GRALLOC_HARDWARE_GPU0 & GRALLOC_HARDWARE_FB0
  * 8 is big enough for "gpu0" & "fb0" currently
  */
@@ -59,6 +62,7 @@ struct private_module_t
 	pthread_mutex_t lock;
 	buffer_handle_t currentBuffer;
 	int ion_client;
+	int drm_fd;
 
 	struct fb_var_screeninfo info;
 	struct fb_fix_screeninfo finfo;
@@ -87,6 +91,9 @@ struct private_handle_t
 
 	enum
 	{
+		/* keep those emun even we don't use them to let MAli
+		 * compile
+		 * PRIV_FLAGS_USES_ION is used for any type of dmabuf buffer */
 		PRIV_FLAGS_FRAMEBUFFER = 0x00000001,
 		PRIV_FLAGS_USES_UMP    = 0x00000002,
 		PRIV_FLAGS_USES_ION    = 0x00000004,
@@ -121,7 +128,8 @@ struct private_handle_t
 	int     fd;
 	int     offset;
 
-	struct ion_handle *ion_hnd;
+	unsigned int drm_hnd;
+
 #define GRALLOC_ARM_DMA_BUF_NUM_INTS 2
 
 #define GRALLOC_ARM_NUM_FDS 1
@@ -154,7 +162,7 @@ struct private_handle_t
 		yuv_info(MALI_YUV_NO_INFO),
 		fd(0),
 		offset(0),
-		ion_hnd(NULL)
+		drm_hnd(0)
 
 	{
 		version = sizeof(native_handle);
@@ -179,7 +187,7 @@ struct private_handle_t
 		yuv_info(MALI_YUV_NO_INFO),
 		fd(fb_file),
 		offset(fb_offset),
-		ion_hnd(NULL)
+		drm_hnd(0)
 	{
 		version = sizeof(native_handle);
 		numFds = sNumFds;
