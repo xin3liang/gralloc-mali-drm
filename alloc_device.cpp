@@ -212,6 +212,7 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 	hnd->height = h;
 	hnd->format = format;
 	hnd->stride = stride;
+	hnd->size = size;
 
 	*pStride = stride;
 	return 0;
