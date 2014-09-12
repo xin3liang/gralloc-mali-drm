@@ -106,9 +106,11 @@ struct private_handle_t
 		LOCK_STATE_READ_MASK =   0x3FFFFFFF
 	};
 
-	// ints
-	/*shared file descriptor for dma_buf sharing*/
+	// file-descriptors
+	// shared file descriptor for dma_buf sharing
 	int     share_fd;
+
+	// ints
 	int     magic;
 	int     flags;
 	int     usage;
@@ -130,19 +132,9 @@ struct private_handle_t
 
 	unsigned int drm_hnd;
 
-#define GRALLOC_ARM_DMA_BUF_NUM_INTS 2
-
-#define GRALLOC_ARM_NUM_FDS 1
-
 #ifdef __cplusplus
-	/*
-	 * We track the number of integers in the structure. There are 11 unconditional
-	 * integers (magic - pid, yuv_info, fd and offset). The GRALLOC_ARM_XXX_NUM_INTS
-	 * variables are used to track the number of integers that are conditionally
-	 * included.
-	 */
-	static const int sNumInts = 15 + GRALLOC_ARM_DMA_BUF_NUM_INTS;
-	static const int sNumFds = GRALLOC_ARM_NUM_FDS;
+	static const int sNumInts = 17;
+	static const int sNumFds = 1;
 	static const int sMagic = 0x3141592;
 
 	private_handle_t(int flags, int usage, int size, int base, int lock_state):

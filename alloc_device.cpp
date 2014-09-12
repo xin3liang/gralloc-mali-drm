@@ -91,7 +91,7 @@ static int gralloc_alloc_buffer(alloc_device_t *dev, int width, int height, int 
 	cpu_ptr = mmap(0, create_arg.size, PROT_WRITE | PROT_READ, MAP_SHARED, m->drm_fd, map_arg.offset);
 
 	if (cpu_ptr == MAP_FAILED) {
-		ALOGE("Faile to mmap DUMB buffer %s", strerror(errno));
+		ALOGE("Failed to mmap DUMB buffer %s", strerror(errno));
 		goto err;
 	}
 
