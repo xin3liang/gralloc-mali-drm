@@ -16,6 +16,10 @@
  * limitations under the License.
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <errno.h>
 #include <pthread.h>
 
@@ -26,6 +30,10 @@
 
 #include "gralloc_priv.h"
 #include "alloc_device.h"
+
+#include "drm_fourcc.h"
+#include "xf86drm.h"
+#include "xf86drmMode.h"
 
 #include <sys/mman.h>
 
@@ -62,8 +70,6 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 
 	pthread_mutex_lock(&s_map_lock);
 
-	hnd->pid = getpid();
-
 	if (hnd->flags & private_handle_t::PRIV_FLAGS_USES_ION)
 	{
 		int ret;
@@ -74,12 +80,13 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 
 		if (MAP_FAILED == mappedAddress)
 		{
-			AERR("mmap( share_fd:%d ) failed with %s",  hnd->share_fd, strerror(errno));
+			AERR("mmap( share_fd:%d ) failed with %s hnd->pid %d getpid() %d",  hnd->share_fd, strerror(errno), hnd->pid, getpid());
 			retval = -errno;
 			goto cleanup;
 		}
 
 		hnd->base = intptr_t(mappedAddress) + hnd->offset;
+		hnd->pid = getpid();
 		pthread_mutex_unlock(&s_map_lock);
 		return 0;
 	}

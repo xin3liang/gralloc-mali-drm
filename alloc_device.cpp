@@ -51,7 +51,6 @@
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof((arr)[0]))
 #endif
 
-
 static int gralloc_alloc_buffer(alloc_device_t *dev, int width, int height, int bpp, int usage, size_t *stride, buffer_handle_t *pHandle)
 {
 	private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
@@ -64,7 +63,7 @@ static int gralloc_alloc_buffer(alloc_device_t *dev, int width, int height, int 
 	private_handle_t *hnd;
 
 	memset (&create_arg, 0, sizeof (create_arg));
-	create_arg.bpp = 32;
+	create_arg.bpp = bpp;
 	create_arg.width = width;
 	create_arg.height = height;
 
@@ -99,9 +98,12 @@ static int gralloc_alloc_buffer(alloc_device_t *dev, int width, int height, int 
 
 	hnd->share_fd = prime_fd;
 	hnd->drm_hnd = create_arg.handle;
+	hnd->pid = getpid();
+	hnd->size = create_arg.size;
+
 	*pHandle = hnd;
 
-	*stride = create_arg.pitch / bpp;
+	*stride = (create_arg.pitch * 8) / bpp ;
 	return 0;
 
 err:
@@ -122,52 +124,30 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 	size_t stride;
 	int bpp = 0;
 
-	if (format == HAL_PIXEL_FORMAT_YCrCb_420_SP || format == HAL_PIXEL_FORMAT_YV12)
+	switch (format)
 	{
-		switch (format)
-		{
-			case HAL_PIXEL_FORMAT_YCrCb_420_SP:
-			case HAL_PIXEL_FORMAT_YV12:
-				stride = GRALLOC_ALIGN(w, 16);
-				size = h * (stride + GRALLOC_ALIGN(stride / 2, 16));
+		case HAL_PIXEL_FORMAT_RGBA_8888:
+		case HAL_PIXEL_FORMAT_RGBX_8888:
+		case HAL_PIXEL_FORMAT_BGRA_8888:
+			bpp = 32;
+			break;
 
-				break;
+		case HAL_PIXEL_FORMAT_RGB_888:
+			bpp = 24;
+			break;
 
-			default:
-				return -EINVAL;
-		}
-	}
-	else
-	{
-		switch (format)
-		{
-			case HAL_PIXEL_FORMAT_RGBA_8888:
-			case HAL_PIXEL_FORMAT_RGBX_8888:
-			case HAL_PIXEL_FORMAT_BGRA_8888:
-				bpp = 4;
-				break;
-
-			case HAL_PIXEL_FORMAT_RGB_888:
-				bpp = 3;
-				break;
-
-			case HAL_PIXEL_FORMAT_RGB_565:
+		case HAL_PIXEL_FORMAT_RGB_565:
 #if PLATFORM_SDK_VERSION < 19
-			case HAL_PIXEL_FORMAT_RGBA_5551:
-			case HAL_PIXEL_FORMAT_RGBA_4444:
+		case HAL_PIXEL_FORMAT_RGBA_5551:
+		case HAL_PIXEL_FORMAT_RGBA_4444:
 #endif
-				bpp = 2;
-				break;
-
-			default:
-				return -EINVAL;
-		}
-
-		size_t bpr = GRALLOC_ALIGN(w * bpp, 64);
-		size = bpr * h;
-		stride = bpr / bpp;
+			bpp = 16;
+			break;
+		default:
+			return -EINVAL;
 	}
 
+	w = GRALLOC_ALIGN(w, 8);
 	int err = gralloc_alloc_buffer(dev, w, h, bpp, usage, &stride, pHandle);
 
 	if (err)
@@ -186,8 +166,7 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 	}
 
 	private_handle_t *hnd = (private_handle_t *)*pHandle;
-	int               private_usage = usage & (GRALLOC_USAGE_PRIVATE_0 |
-	                                  GRALLOC_USAGE_PRIVATE_1);
+	int private_usage = usage & (GRALLOC_USAGE_PRIVATE_0 | GRALLOC_USAGE_PRIVATE_1);
 
 	switch (private_usage)
 	{
@@ -212,7 +191,6 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 	hnd->height = h;
 	hnd->format = format;
 	hnd->stride = stride;
-	hnd->size = size;
 
 	*pStride = stride;
 	return 0;
