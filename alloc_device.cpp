@@ -121,7 +121,7 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 	}
 
 	size_t size;
-	size_t stride;
+	size_t stride = 0;
 	int bpp = 0;
 
 	switch (format)
@@ -142,6 +142,9 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 		case HAL_PIXEL_FORMAT_RGBA_4444:
 #endif
 			bpp = 16;
+			break;
+		case HAL_PIXEL_FORMAT_YV12:
+			bpp = 12;
 			break;
 		default:
 			return -EINVAL;
@@ -191,6 +194,7 @@ static int alloc_device_alloc(alloc_device_t *dev, int w, int h, int format, int
 	hnd->height = h;
 	hnd->format = format;
 	hnd->stride = stride;
+	hnd->format = format;
 
 	*pStride = stride;
 	return 0;

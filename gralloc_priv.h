@@ -131,6 +131,7 @@ struct private_handle_t
 	int     offset;
 
 	unsigned int drm_hnd;
+	int	plane_id;
 
 #ifdef __cplusplus
 	static const int sNumInts = 17;
@@ -154,8 +155,8 @@ struct private_handle_t
 		yuv_info(MALI_YUV_NO_INFO),
 		fd(0),
 		offset(0),
-		drm_hnd(0)
-
+		drm_hnd(0),
+		plane_id(0)
 	{
 		version = sizeof(native_handle);
 		numFds = sNumFds;
@@ -179,7 +180,8 @@ struct private_handle_t
 		yuv_info(MALI_YUV_NO_INFO),
 		fd(fb_file),
 		offset(fb_offset),
-		drm_hnd(0)
+		drm_hnd(0),
+		plane_id(0)
 	{
 		version = sizeof(native_handle);
 		numFds = sNumFds;
