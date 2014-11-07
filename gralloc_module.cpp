@@ -85,7 +85,7 @@ static int gralloc_register_buffer(gralloc_module_t const *module, buffer_handle
 			goto cleanup;
 		}
 
-		hnd->base = intptr_t(mappedAddress) + hnd->offset;
+		hnd->base = mappedAddress + hnd->offset;
 		hnd->pid = getpid();
 		pthread_mutex_unlock(&s_map_lock);
 		return 0;

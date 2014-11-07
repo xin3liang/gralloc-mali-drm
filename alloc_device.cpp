@@ -39,7 +39,6 @@
 
 #include "alloc_device.h"
 #include "gralloc_priv.h"
-#include "gralloc_helper.h"
 
 #include "drm_fourcc.h"
 #include "xf86drm.h"
@@ -94,7 +93,7 @@ static int gralloc_alloc_buffer(alloc_device_t *dev, int width, int height, int 
 		goto err;
 	}
 
-	hnd = new private_handle_t(private_handle_t::PRIV_FLAGS_USES_ION, usage, create_arg.size, (int)cpu_ptr, private_handle_t::LOCK_STATE_MAPPED);
+	hnd = new private_handle_t(private_handle_t::PRIV_FLAGS_USES_ION, usage, create_arg.size, cpu_ptr, private_handle_t::LOCK_STATE_MAPPED);
 
 	hnd->share_fd = prime_fd;
 	hnd->drm_hnd = create_arg.handle;

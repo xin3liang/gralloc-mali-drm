@@ -119,7 +119,7 @@ struct private_handle_t
 	int     height;
 	int     format;
 	int     stride;
-	int     base;
+	void    *base;
 	int     lockState;
 	int     writeOwner;
 	int     pid;
@@ -138,7 +138,7 @@ struct private_handle_t
 	static const int sNumFds = 1;
 	static const int sMagic = 0x3141592;
 
-	private_handle_t(int flags, int usage, int size, int base, int lock_state):
+	private_handle_t(int flags, int usage, int size, void *base, int lock_state):
 		share_fd(-1),
 		magic(sMagic),
 		flags(flags),
@@ -163,7 +163,7 @@ struct private_handle_t
 		numInts = sNumInts;
 	}
 
-	private_handle_t(int flags, int usage, int size, int base, int lock_state, int fb_file, int fb_offset):
+	private_handle_t(int flags, int usage, int size, void *base, int lock_state, int fb_file, int fb_offset):
 		share_fd(-1),
 		magic(sMagic),
 		flags(flags),
