@@ -22,9 +22,9 @@ LOCAL_PATH := $(call my-dir)
 # hw/<OVERLAY_HARDWARE_MODULE_ID>.<ro.product.board>.so
 include $(CLEAR_VARS)
 LOCAL_PRELINK_MODULE := false
-LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
+LOCAL_MODULE_RELATIVE_PATH := hw
 
-LOCAL_MODULE := gralloc.default
+LOCAL_MODULE := gralloc.$(TARGET_BOARD_PLATFORM)
 #LOCAL_MODULE_TAGS := optional
 
 LOCAL_SHARED_LIBRARIES := libdrm libhardware liblog libcutils
@@ -34,7 +34,8 @@ LOCAL_C_INCLUDES := system/core/include/ \
         $(LOCAL_PATH)/../../../../external/drm/include/drm \
         $(LOCAL_PATH)/../../include
 
-LOCAL_CFLAGS := -DLOG_TAG=\"gralloc\" -DGRALLOC_32_BITS -DSTANDARD_LINUX_SCREEN -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
+LOCAL_CFLAGS := -DLOG_TAG=\"gralloc\" -DGRALLOC_32_BITS -DSTANDARD_LINUX_SCREEN \
+	-DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION) -fpermissive
 
 LOCAL_SRC_FILES := \
 	gralloc_module.cpp \
